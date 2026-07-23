@@ -1,0 +1,10 @@
+.venv/
+.serena/
+__pycache__/
+*.py[cod]
+
+users.json
+proxies.txt
+
+output/*
+!output/.gitkeep
