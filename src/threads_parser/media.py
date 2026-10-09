@@ -72,7 +72,14 @@ async def _write_playwright_media(
             raise RuntimeError(f"HTTP {response.status}")
         body = await response.body()
         if traffic_monitor is not None and account_id is not None:
-            traffic_monitor.record_api_response(account_id, response.url, response.status, response.headers, len(body))
+            traffic_monitor.record_api_response(
+                account_id,
+                media["url"],
+                response.status,
+                "GET",
+                options.get("headers", {}),
+                len(body),
+            )
         if not body:
             raise RetryableMediaError("Empty media response.")
         temporary_path.write_bytes(body)
@@ -84,6 +91,8 @@ async def _write_httpx_media(
     temporary_path: Path,
     media: dict[str, Any],
     client: httpx.AsyncClient | None,
+    traffic_monitor: TrafficMonitor | None = None,
+    account_id: str | None = None,
 ) -> None:
     if client is None:
         raise RuntimeError("Media client is unavailable.")
@@ -93,12 +102,25 @@ async def _write_httpx_media(
         response.raise_for_status()
         if "text/html" in response.headers.get("content-type", "").lower():
             raise RuntimeError("Media URL returned HTML.")
+        response_size = 0
         with temporary_path.open("wb") as file:
             async for chunk in response.aiter_bytes():
                 if chunk:
                     file.write(chunk)
+                    response_size += len(chunk)
         if not temporary_path.stat().st_size:
             raise RetryableMediaError("Empty media response.")
+        if traffic_monitor is not None and account_id is not None:
+            request = response.request
+            traffic_monitor.record_api_response(
+                account_id,
+                str(request.url),
+                response.status_code,
+                request.method,
+                dict(request.headers),
+                response_size,
+                request.content,
+            )
 
 
 async def _download_media_file(
@@ -140,7 +162,13 @@ async def _download_media_file(
                         account_id,
                     )
                 else:
-                    await _write_httpx_media(temporary_path, media, client)
+                    await _write_httpx_media(
+                        temporary_path,
+                        media,
+                        client,
+                        traffic_monitor,
+                        account_id,
+                    )
                 temporary_path.replace(local_path)
             return True, True
         except AccountUnavailableError:

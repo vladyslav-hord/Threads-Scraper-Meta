@@ -5,6 +5,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
+from threads_parser.media import _write_httpx_media
+from threads_parser.traffic import estimate_request_bytes
+
 from threads_parser.cli import (
     PlaywrightError,
     TrafficMonitor,
@@ -472,6 +476,45 @@ class MediaRetryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((available, downloaded), (1, 1))
             self.assertEqual(monitor.accounts["acc_01"].response_bytes, 5)
             self.assertEqual(monitor.domains["cdn.example"].statuses, {"200": 1})
+
+    async def test_httpx_media_records_actual_request_and_response_traffic(self) -> None:
+        class Response:
+            status_code = 206
+            headers = {"content-type": "image/jpeg"}
+            request = httpx.Request("GET", "https://cdn.example/photo.jpg?size=large", headers={"x-test": "request"})
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+            def raise_for_status(self):
+                pass
+
+            async def aiter_bytes(self):
+                yield b"abc"
+
+        class Client:
+            def stream(self, *_args):
+                return Response()
+
+        with tempfile.TemporaryDirectory() as directory:
+            monitor = TrafficMonitor()
+            await _write_httpx_media(
+                Path(directory) / "photo.jpg",
+                {"url": "https://cdn.example/photo.jpg?size=large", "type": "image"},
+                Client(),
+                monitor,
+                "anonymous",
+            )
+
+        bucket = monitor.accounts["anonymous"]
+        assert bucket.request_bytes == estimate_request_bytes(Response.request) > 0
+        assert bucket.request_count == 1
+        assert bucket.response_count == 1
+        assert bucket.response_bytes == 3
+        assert bucket.statuses == {"206": 1}
 
 
 class ScrollingTests(unittest.IsolatedAsyncioTestCase):

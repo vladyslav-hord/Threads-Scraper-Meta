@@ -53,9 +53,26 @@ class TrafficMonitor:
             bucket.unknown_response_bytes += unknown
             bucket.statuses[status] = bucket.statuses.get(status, 0) + 1
 
-    def record_api_response(self, account_id: str, url: str, status: int, headers: dict[str, str], body_size: int) -> None:
+    def record_api_response(
+        self,
+        account_id: str,
+        url: str,
+        status: int,
+        method: str,
+        request_headers: dict[str, str],
+        body_size: int,
+        request_body: bytes | None = None,
+    ) -> None:
+        request = type("APIRequest", (), {
+            "url": url,
+            "method": method,
+            "headers": request_headers,
+            "post_data_buffer": request_body,
+        })()
+        request_size = estimate_request_bytes(request)
         for bucket in self._buckets(account_id, url, "media_api"):
             bucket.request_count += 1
+            bucket.request_bytes += request_size
             bucket.response_count += 1
             bucket.response_bytes += body_size
             bucket.statuses[str(status)] = bucket.statuses.get(str(status), 0) + 1
@@ -105,7 +122,7 @@ def content_length(headers: dict[str, str]) -> int | None:
 
 
 def estimate_request_bytes(request: Any) -> int:
-    url = getattr(request, "url", "")
+    url = str(getattr(request, "url", ""))
     method = getattr(request, "method", "GET") or "GET"
     parsed = urlparse(url)
     target = parsed.path or "/"

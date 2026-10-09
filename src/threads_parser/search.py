@@ -162,7 +162,11 @@ async def load_search_results(
     keywords: list[str] | None = None,
     search_mode: str = DEFAULT_SEARCH_MODE,
     search_type: str = DEFAULT_SEARCH_TYPE,
+    traffic_monitor: TrafficMonitor | None = None,
+    account_id: str | None = None,
 ) -> tuple[list[Any], str, str, str]:
+    from .browser import launch_browser
+
     async with async_playwright() as playwright:
         browser = await launch_browser(playwright, proxy)
         try:
@@ -174,6 +178,8 @@ async def load_search_results(
                 keywords=keywords,
                 search_mode=search_mode,
                 search_type=search_type,
+                traffic_monitor=traffic_monitor,
+                account_id=account_id,
             )
         finally:
             try:
@@ -190,10 +196,16 @@ async def load_search_results_in_browser(
     keywords: list[str] | None = None,
     search_mode: str = DEFAULT_SEARCH_MODE,
     search_type: str = DEFAULT_SEARCH_TYPE,
+    traffic_monitor: TrafficMonitor | None = None,
+    account_id: str | None = None,
 ) -> tuple[list[Any], str, str, str]:
+    from .browser import configure_scan_context
+
     context = await browser.new_context(viewport={"width": 1280, "height": 900}, service_workers="block")
     try:
         await configure_scan_context(context)
+        if traffic_monitor is not None and account_id is not None:
+            traffic_monitor.attach_context(account_id, context)
         return await load_search_results_in_context(
             context,
             query,
@@ -202,6 +214,8 @@ async def load_search_results_in_browser(
             keywords=keywords,
             search_mode=search_mode,
             search_type=search_type,
+            traffic_monitor=traffic_monitor,
+            account_id=account_id,
         )
     finally:
         try:
@@ -219,6 +233,8 @@ async def load_search_results_in_context(
     keywords: list[str] | None = None,
     search_mode: str = DEFAULT_SEARCH_MODE,
     search_type: str = DEFAULT_SEARCH_TYPE,
+    traffic_monitor: TrafficMonitor | None = None,
+    account_id: str | None = None,
 ) -> tuple[list[Any], str, str, str]:
     raw_items: list[Any] = []
     response_tasks: list[asyncio.Task[None]] = []

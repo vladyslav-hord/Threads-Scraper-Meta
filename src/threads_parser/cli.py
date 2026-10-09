@@ -174,6 +174,7 @@ async def run(
     account_id: str | None = None,
     keywords: list[str] | None = None,
 ) -> None:
+    account_id = account_id or ("anonymous" if traffic_monitor is not None else None)
     output_dir = Path("output") / username
     saved_posts = load_saved_posts(output_dir / "posts.json") if incremental else []
     saved_posts = filter_posts_by_keywords(saved_posts, keywords)
@@ -197,6 +198,8 @@ async def run(
             known_permalinks,
             authenticated=True,
             keywords=keywords,
+            traffic_monitor=traffic_monitor,
+            account_id=account_id,
         )
     elif browser is None:
         raw_items, dom_posts, user_agent = await load_public_profile(
@@ -205,6 +208,8 @@ async def run(
             proxy,
             known_permalinks,
             keywords,
+            traffic_monitor,
+            account_id,
         )
     else:
         raw_items, dom_posts, user_agent = await load_public_profile_in_browser(
@@ -214,6 +219,8 @@ async def run(
             known_permalinks,
             proxied=proxy is not None,
             keywords=keywords,
+            traffic_monitor=traffic_monitor,
+            account_id=account_id,
         )
     fetched_posts = merge_posts(extract_posts(raw_items, username), dom_posts, prefer_incoming_text=False)
     if not fetched_posts:
@@ -272,6 +279,7 @@ async def run_search(
     search_mode: str = DEFAULT_SEARCH_MODE,
     search_type: str = DEFAULT_SEARCH_TYPE,
 ) -> None:
+    account_id = account_id or ("anonymous" if traffic_monitor is not None else None)
     output_dir = search_output_dir(query, search_mode, search_type)
     saved_posts = load_saved_posts(output_dir / "posts.json") if incremental else []
     saved_posts = filter_posts_by_keywords(saved_posts, keywords)
@@ -287,6 +295,8 @@ async def run_search(
             keywords=keywords,
             search_mode=search_mode,
             search_type=search_type,
+            traffic_monitor=traffic_monitor,
+            account_id=account_id,
         )
     elif browser is None:
         raw_items, user_agent, actual_mode, actual_type = await load_search_results(
@@ -296,6 +306,8 @@ async def run_search(
             keywords,
             search_mode,
             search_type,
+            traffic_monitor,
+            account_id,
         )
     else:
         raw_items, user_agent, actual_mode, actual_type = await load_search_results_in_browser(
@@ -306,6 +318,8 @@ async def run_search(
             keywords=keywords,
             search_mode=search_mode,
             search_type=search_type,
+            traffic_monitor=traffic_monitor,
+            account_id=account_id,
         )
 
     if not search_result_connections(raw_items):
@@ -593,7 +607,11 @@ async def run_batch(
     workers: int = 3,
     incremental: bool = False,
     keywords: list[str] | None = None,
+    traffic_monitor: TrafficMonitor | None = None,
+    traffic_report_path: Path | None = None,
 ) -> list[str]:
+    if traffic_report_path is not None and traffic_monitor is None:
+        traffic_monitor = TrafficMonitor()
     failed: list[str] = []
     groups = build_proxy_groups(usernames, proxies, profiles_per_proxy)
     queue: asyncio.Queue[tuple[list[str], str | None]] = asyncio.Queue()
@@ -629,6 +647,8 @@ async def run_batch(
                                 browser,
                                 incremental,
                                 keywords=keywords,
+                                traffic_monitor=traffic_monitor,
+                                account_id="anonymous" if traffic_monitor is not None else None,
                             )
                         except ProxyAccessError:
                             if active_proxy:
@@ -655,7 +675,15 @@ async def run_batch(
     print()
     print(f"Profiles processed: {len(usernames)}")
     print(f"Profiles failed: {len(failed)}")
+    if traffic_monitor is not None and traffic_report_path is not None:
+        finish_traffic_report(traffic_monitor, traffic_report_path)
     return failed
+
+
+def finish_traffic_report(traffic_monitor: TrafficMonitor, report_path: Path) -> None:
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, traffic_monitor.report())
+    traffic_monitor.print_summary(report_path)
 
 
 async def run_login_command(account: AccountConfig) -> None:
@@ -731,6 +759,7 @@ def main() -> None:
             raise RuntimeError("The selected proxy is quarantined; see blocked_proxies.json.")
         if args.search:
             selected_proxy = random.choice(proxies) if proxies else args.proxy
+            traffic_monitor = TrafficMonitor() if args.traffic_report else None
             try:
                 asyncio.run(
                     run_search(
@@ -741,15 +770,20 @@ def main() -> None:
                         keywords=args.keywords,
                         search_mode=args.search_mode,
                         search_type=args.search_type,
+                        traffic_monitor=traffic_monitor,
+                        account_id="anonymous" if traffic_monitor is not None else None,
                     )
                 )
             except ProxyAccessError:
                 if selected_proxy:
                     quarantine_proxy(selected_proxy, PROXY_ERROR)
                 raise RuntimeError("Proxy was quarantined after an access failure.") from None
+            if traffic_monitor is not None:
+                finish_traffic_report(traffic_monitor, args.traffic_report)
             return
         if args.username:
             selected_proxy = random.choice(proxies) if proxies else args.proxy
+            traffic_monitor = TrafficMonitor() if args.traffic_report else None
             try:
                 asyncio.run(
                     run(
@@ -758,12 +792,16 @@ def main() -> None:
                         selected_proxy,
                         incremental=args.incremental,
                         keywords=args.keywords,
+                        traffic_monitor=traffic_monitor,
+                        account_id="anonymous" if traffic_monitor is not None else None,
                     )
                 )
             except ProxyAccessError:
                 if selected_proxy:
                     quarantine_proxy(selected_proxy, PROXY_ERROR)
                 raise RuntimeError("Proxy was quarantined after an access failure.") from None
+            if traffic_monitor is not None:
+                finish_traffic_report(traffic_monitor, args.traffic_report)
             return
 
         usernames = load_usernames(args.users_file)
@@ -777,6 +815,7 @@ def main() -> None:
                 args.workers,
                 args.incremental,
                 args.keywords,
+                traffic_report_path=args.traffic_report,
             )
         )
         if failed:

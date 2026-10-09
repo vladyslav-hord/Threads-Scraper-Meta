@@ -12,14 +12,25 @@ BLOCKED_PROXIES_FILE = Path("blocked_proxies.json")
 
 
 def _load_entries(path: Path, key: str) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        contents = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return []
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(f"Cannot read quarantine state: {path}") from exc
+    try:
+        data = json.loads(contents)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Invalid quarantine state: {path}") from exc
     entries = data.get(key) if isinstance(data, dict) else None
-    return [entry for entry in entries if isinstance(entry, dict)] if isinstance(entries, list) else []
+    field = "id" if key == "accounts" else "proxy"
+    if (
+        not isinstance(data, dict)
+        or not isinstance(entries, list)
+        or any(not isinstance(entry, dict) or not isinstance(entry.get(field), str) for entry in entries)
+    ):
+        raise RuntimeError(f"Invalid quarantine state structure: {path}")
+    return entries
 
 
 def _write_entries(path: Path, key: str, entries: list[dict[str, Any]]) -> None:

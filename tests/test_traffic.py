@@ -1,4 +1,4 @@
-from threads_parser.traffic import TrafficMonitor, format_bytes
+from threads_parser.traffic import TrafficMonitor, estimate_request_bytes, format_bytes
 
 
 class Request:
@@ -27,3 +27,25 @@ def test_traffic_buckets_track_request_and_response_bytes_without_query_string()
     assert report["accounts"]["parser_01"]["response_bytes"] == 12
     assert "secret=ignored-in-reports" not in str(report)
     assert format_bytes(2048) == "2.0 KB"
+
+
+def test_api_response_records_request_bytes_from_actual_request_metadata() -> None:
+    monitor = TrafficMonitor()
+    request = Request()
+    expected_request_bytes = estimate_request_bytes(request)
+
+    monitor.record_api_response(
+        "parser_01",
+        request.url,
+        206,
+        request.method,
+        request.headers,
+        12,
+    )
+
+    bucket = monitor.accounts["parser_01"]
+    assert bucket.request_bytes == expected_request_bytes > 0
+    assert bucket.request_count == 1
+    assert bucket.response_count == 1
+    assert bucket.response_bytes == 12
+    assert bucket.statuses == {"206": 1}

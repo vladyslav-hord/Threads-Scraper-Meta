@@ -232,7 +232,7 @@ async def create_account_context(
             service_workers="block",
         )
     except PlaywrightError as exc:
-        raise AccountUnavailableError("Parser account session must be refreshed.", REAUTH_REQUIRED) from exc
+        raise AccountUnavailableError("Parser account proxy context could not be created.", PROXY_ERROR) from exc
 
 
 def _has_live_session_cookie(cookies: list[dict[str, Any]]) -> bool:

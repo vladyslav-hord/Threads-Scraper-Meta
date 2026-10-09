@@ -215,6 +215,8 @@ async def load_public_profile(
     proxy: str | None,
     known_permalinks: set[str] | None = None,
     keywords: list[str] | None = None,
+    traffic_monitor: TrafficMonitor | None = None,
+    account_id: str | None = None,
 ) -> tuple[list[Any], list[dict[str, Any]], str]:
     async with async_playwright() as playwright:
         browser = await launch_browser(playwright, proxy)
@@ -226,6 +228,8 @@ async def load_public_profile(
                 known_permalinks,
                 proxied=proxy is not None,
                 keywords=keywords,
+                traffic_monitor=traffic_monitor,
+                account_id=account_id,
             )
         finally:
             try:
@@ -252,10 +256,14 @@ async def load_public_profile_in_browser(
     known_permalinks: set[str] | None = None,
     proxied: bool = False,
     keywords: list[str] | None = None,
+    traffic_monitor: TrafficMonitor | None = None,
+    account_id: str | None = None,
 ) -> tuple[list[Any], list[dict[str, Any]], str]:
     context = await browser.new_context(viewport={"width": 1280, "height": 900}, service_workers="block")
     try:
         await configure_scan_context(context)
+        if traffic_monitor is not None and account_id is not None:
+            traffic_monitor.attach_context(account_id, context)
         return await load_public_profile_in_context(
             context,
             username,
@@ -263,6 +271,8 @@ async def load_public_profile_in_browser(
             known_permalinks,
             proxied=proxied,
             keywords=keywords,
+            traffic_monitor=traffic_monitor,
+            account_id=account_id,
         )
     finally:
         try:
@@ -279,6 +289,8 @@ async def load_public_profile_in_context(
     authenticated: bool = False,
     proxied: bool = False,
     keywords: list[str] | None = None,
+    traffic_monitor: TrafficMonitor | None = None,
+    account_id: str | None = None,
 ) -> tuple[list[Any], list[dict[str, Any]], str]:
     raw_items: list[Any] = []
     dom_posts: list[dict[str, Any]] = []

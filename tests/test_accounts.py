@@ -2,6 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock
+
+from playwright.async_api import Error as PlaywrightError
 
 from threads_parser.accounts import (
     AccountConfig,
@@ -11,6 +14,9 @@ from threads_parser.accounts import (
     assign_targets_fair,
     local_session_status,
     load_accounts,
+    AccountUnavailableError,
+    create_account_context,
+    PROXY_ERROR,
     REAUTH_REQUIRED,
     session_path,
 )
@@ -96,6 +102,32 @@ class AccountConfigTests(unittest.TestCase):
             session_path(account.id, Path(directory)).write_text('{"cookies": []}', encoding="utf-8")
 
             self.assertEqual(local_session_status(account, Path(directory)), REAUTH_REQUIRED)
+
+
+class AccountContextIsolationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_context_uses_fixed_proxy_and_state_and_never_retries_direct(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account = AccountConfig("acc_01", "parser", "http://user:pass@proxy.invalid:8080")
+            session_path(account.id, root).write_text(
+                json.dumps({"cookies": [{"name": "sessionid", "value": "opaque", "expires": -1}]}),
+                encoding="utf-8",
+            )
+            browser = type("Browser", (), {})()
+            browser.new_context = AsyncMock(side_effect=PlaywrightError("proxy context failed"))
+
+            with self.assertRaises(AccountUnavailableError) as raised:
+                await create_account_context(browser, account, root)
+
+        self.assertEqual(raised.exception.status, PROXY_ERROR)
+        browser.new_context.assert_awaited_once()
+        options = browser.new_context.await_args.kwargs
+        self.assertEqual(options["proxy"], {
+            "server": "http://proxy.invalid:8080",
+            "username": "user",
+            "password": "pass",
+        })
+        self.assertEqual(options["storage_state"], session_path(account.id, root))
 
 
 class AssignmentTests(unittest.TestCase):
