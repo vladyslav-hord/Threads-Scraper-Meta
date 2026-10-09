@@ -1,87 +1,175 @@
-# Threads Parser v2
+# Meta Threads Scraper
 
-Concurrent Threads public-data parser with profile/search crawling, incremental updates, filtering, resilient media downloads, proxy support and isolated authenticated parser-account sessions.
+Python scraper for **Meta Threads (threads.com)** with profile crawling, search, media downloads, incremental updates, proxy rotation, and authenticated parser sessions.
+
+Built with **Python, Playwright, and HTTPX**.
 
 ## Features
 
-- Single and batch public-profile parsing; keyword/tag search in top or recent order.
-- Post limits or full-feed crawling, phrase filters, deduplication, and incremental JSON/media updates.
-- Concurrent workers, anonymous HTTP/HTTPS proxies, local quarantine, and traffic reports.
-- Optional isolated Playwright contexts per operator-supplied parser account, persistent sessions, fixed proxies, TOTP helper, account checks, and cross-account retries.
-- Blocks image, media, and font requests while scanning; media downloads retry with backoff and atomic `.part` files.
-
-## Architecture
-
-`cli` contains argparse validation and the command entry point; `runner` orchestrates profile, search, proxy, and account workflows; `parser` extracts and normalizes posts; `browser` configures Playwright and collects profiles; `search` handles search modes and pagination; `media` downloads media; `proxies` and `accounts` manage network/account inputs; `errors` holds shared workflow exceptions; `quarantine` persists health state; `traffic` reports bytes; `storage` handles saved posts.
+- Public Threads profile scraping
+- Keyword/tag search with TOP and RECENT results
+- Batch crawling and parallel workers
+- `--max-posts` and `--all-posts`
+- Keyword and phrase filtering
+- Incremental updates and deduplication
+- Image/video downloads with retries
+- HTTP/HTTPS proxy rotation and quarantine
+- Isolated authenticated parser accounts
+- Persistent Playwright sessions
+- Per-account limits and cross-account retries
+- Traffic monitoring
+- Automated tests on Python 3.11 and 3.13
 
 ## Installation
 
-Python 3.11+ and Chromium are required.
+Requires Python 3.11+ and Chromium.
 
 ```bash
-uv venv .venv
-uv pip install --python .venv/Scripts/python.exe -e '.[dev]'
-.venv/Scripts/playwright.exe install chromium
+git clone https://github.com/vladyslav-hord/meta-threads-scraper.git
+cd meta-threads-scraper
+
+python -m venv .venv
+python -m pip install -e .
+playwright install chromium
 ```
 
-Use the platform-equivalent executable path on non-Windows systems.
+## Usage
 
-## Quick start
+Scrape a profile:
 
 ```bash
-python -m threads_parser example_user --max-posts 20
 threads-parser example_user --max-posts 20
 ```
 
-## Profile examples
+Full crawl:
 
 ```bash
-python -m threads_parser example_user --max-posts 20
-python -m threads_parser --users-file users.json --all-posts --workers 3
-python -m threads_parser example_user --keywords python "machine learning"
+threads-parser example_user --all-posts
 ```
 
-`--max-posts` counts posts after filtering. `--all-posts` scrolls until the feed is exhausted.
-
-## Search examples
+Batch:
 
 ```bash
-python -m threads_parser --search "beach volleyball" --search-mode keyword --search-type recent
-python -m threads_parser --search volleyball --search-mode tag --search-type top
+threads-parser --users-file users.json --max-posts 20
 ```
 
-## Incremental
+Filter posts:
 
 ```bash
-python -m threads_parser example_user --incremental
+threads-parser example_user --keywords python "machine learning"
 ```
 
-Saved posts remain in place, existing media is reused, and stale unreferenced media is pruned.
-
-## Anonymous proxies
-
-Provide `--proxy http://host:port` or a `--proxies-file proxies.txt` with one HTTP/HTTPS proxy per line. Credentialed proxy URLs are accepted; keep local lists private. Proxy groups run concurrently with `--profiles-per-proxy` and `--workers`.
-
-## Parser accounts
-
-Copy `accounts.example.json` to ignored `accounts.json`, set each account's fixed HTTP/HTTPS proxy, then authenticate interactively:
+Incremental update:
 
 ```bash
-python -m threads_parser --accounts-file accounts.json --login-account parser_01
-python -m threads_parser --accounts-file accounts.json --check-accounts
-python -m threads_parser --users-file users.json --accounts-file accounts.json --workers 3
+threads-parser example_user --incremental
 ```
 
-Account sessions are isolated and stored under ignored `sessions/`. `--profiles-per-account` sets a run limit; failed targets can be retried on a different healthy account, never the same account. `otp_code.py` generates a TOTP code interactively.
-
-## Security/privacy
-
-This tool collects public content and can use operator-supplied authenticated parser sessions. Accounts require fixed proxies; proxy failure never falls back to a direct connection. Session and quarantine files may contain authentication or proxy data and are excluded from Git. Never add passwords to `accounts.json`. The tool does not bypass CAPTCHA, restrictions, access controls, or private profiles; follow applicable laws and platform terms.
-
-## Development/testing
+### Search
 
 ```bash
-uv pip install --python .venv/Scripts/python.exe -e '.[dev]'
-.venv/Scripts/python.exe -m compileall -q src tests
-.venv/Scripts/python.exe -m pytest -q
+threads-parser \
+  --search "machine learning" \
+  --search-mode keyword \
+  --search-type recent
 ```
+
+Supported combinations:
+
+- keyword / tag
+- top / recent
+
+## Proxies
+
+Single proxy:
+
+```bash
+threads-parser example_user \
+  --proxy http://user:password@host:port
+```
+
+Proxy rotation:
+
+```bash
+threads-parser \
+  --users-file users.json \
+  --proxies-file proxies.txt \
+  --profiles-per-proxy 3 \
+  --workers 3
+```
+
+Failed proxies can be quarantined locally. A configured proxy does not silently fall back to a direct connection.
+
+## Authenticated Parser Accounts
+
+Parser accounts use isolated Playwright sessions and a fixed proxy per account.
+
+```bash
+threads-parser \
+  --accounts-file accounts.json \
+  --login-account parser_01
+```
+
+Check sessions:
+
+```bash
+threads-parser \
+  --accounts-file accounts.json \
+  --check-accounts
+```
+
+Run:
+
+```bash
+threads-parser \
+  --users-file users.json \
+  --accounts-file accounts.json \
+  --workers 3 \
+  --incremental
+```
+
+If an account becomes unavailable, a retryable target can be reassigned to another healthy account.
+
+Passwords are not stored in `accounts.json`. Sessions, credentials, proxy lists, output, and quarantine state are excluded from Git.
+
+## Architecture
+
+```text
+src/threads_parser/
+├── cli.py
+├── runner.py
+├── browser.py
+├── search.py
+├── parser.py
+├── media.py
+├── accounts.py
+├── proxies.py
+├── quarantine.py
+├── traffic.py
+├── storage.py
+└── errors.py
+```
+
+The browser layer collects data from Threads, while parsing, media handling, storage, proxy/account management, and orchestration remain separate.
+
+## Development
+
+```bash
+python -m pip install -e ".[dev]"
+python -m compileall -q src tests
+python -m pytest -q
+```
+
+CI runs the test suite on Python 3.11 and 3.13.
+
+## Scope
+
+The project is intended for public Threads content and operator-supplied authenticated sessions.
+
+It does not bypass private profiles, CAPTCHA, authentication restrictions, account challenges, or platform access controls.
+
+Threads is an external platform and changes to its internal responses or page structure may require parser updates.
+
+## License
+
+MIT
