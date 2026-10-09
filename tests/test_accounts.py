@@ -134,6 +134,13 @@ class AssignmentTests(unittest.TestCase):
         self.assertFalse(exhausted_groups)
         self.assertEqual(exhausted, [job])
 
+    def test_target_job_rejects_retry_on_same_account(self) -> None:
+        job = TargetJob("synthetic_target")
+        job.record_attempt("acc_01")
+
+        with self.assertRaises(AccountError):
+            job.record_attempt("acc_01")
+
 
 if __name__ == "__main__":
     unittest.main()
