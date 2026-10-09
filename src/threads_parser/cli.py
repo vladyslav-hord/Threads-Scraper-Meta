@@ -761,47 +761,51 @@ def main() -> None:
             selected_proxy = random.choice(proxies) if proxies else args.proxy
             traffic_monitor = TrafficMonitor() if args.traffic_report else None
             try:
-                asyncio.run(
-                    run_search(
-                        args.search,
-                        args.max_posts,
-                        selected_proxy,
-                        incremental=args.incremental,
-                        keywords=args.keywords,
-                        search_mode=args.search_mode,
-                        search_type=args.search_type,
-                        traffic_monitor=traffic_monitor,
-                        account_id="anonymous" if traffic_monitor is not None else None,
+                try:
+                    asyncio.run(
+                        run_search(
+                            args.search,
+                            args.max_posts,
+                            selected_proxy,
+                            incremental=args.incremental,
+                            keywords=args.keywords,
+                            search_mode=args.search_mode,
+                            search_type=args.search_type,
+                            traffic_monitor=traffic_monitor,
+                            account_id="anonymous" if traffic_monitor is not None else None,
+                        )
                     )
-                )
-            except ProxyAccessError:
-                if selected_proxy:
-                    quarantine_proxy(selected_proxy, PROXY_ERROR)
-                raise RuntimeError("Proxy was quarantined after an access failure.") from None
-            if traffic_monitor is not None:
-                finish_traffic_report(traffic_monitor, args.traffic_report)
+                except ProxyAccessError:
+                    if selected_proxy:
+                        quarantine_proxy(selected_proxy, PROXY_ERROR)
+                    raise RuntimeError("Proxy was quarantined after an access failure.") from None
+            finally:
+                if traffic_monitor is not None:
+                    finish_traffic_report(traffic_monitor, args.traffic_report)
             return
         if args.username:
             selected_proxy = random.choice(proxies) if proxies else args.proxy
             traffic_monitor = TrafficMonitor() if args.traffic_report else None
             try:
-                asyncio.run(
-                    run(
-                        args.username,
-                        args.max_posts,
-                        selected_proxy,
-                        incremental=args.incremental,
-                        keywords=args.keywords,
-                        traffic_monitor=traffic_monitor,
-                        account_id="anonymous" if traffic_monitor is not None else None,
+                try:
+                    asyncio.run(
+                        run(
+                            args.username,
+                            args.max_posts,
+                            selected_proxy,
+                            incremental=args.incremental,
+                            keywords=args.keywords,
+                            traffic_monitor=traffic_monitor,
+                            account_id="anonymous" if traffic_monitor is not None else None,
+                        )
                     )
-                )
-            except ProxyAccessError:
-                if selected_proxy:
-                    quarantine_proxy(selected_proxy, PROXY_ERROR)
-                raise RuntimeError("Proxy was quarantined after an access failure.") from None
-            if traffic_monitor is not None:
-                finish_traffic_report(traffic_monitor, args.traffic_report)
+                except ProxyAccessError:
+                    if selected_proxy:
+                        quarantine_proxy(selected_proxy, PROXY_ERROR)
+                    raise RuntimeError("Proxy was quarantined after an access failure.") from None
+            finally:
+                if traffic_monitor is not None:
+                    finish_traffic_report(traffic_monitor, args.traffic_report)
             return
 
         usernames = load_usernames(args.users_file)

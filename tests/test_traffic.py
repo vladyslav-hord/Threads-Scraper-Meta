@@ -1,3 +1,5 @@
+import json
+
 from threads_parser.traffic import TrafficMonitor, estimate_request_bytes, format_bytes
 
 
@@ -49,3 +51,22 @@ def test_api_response_records_request_bytes_from_actual_request_metadata() -> No
     assert bucket.response_count == 1
     assert bucket.response_bytes == 12
     assert bucket.statuses == {"206": 1}
+
+
+def test_report_redacts_url_credentials_and_preserves_ipv6_host_and_path() -> None:
+    monitor = TrafficMonitor()
+    request = type("Request", (), {
+        "url": "https://alice:verysecret@[2001:db8::1]:8443/private/path?token=ignored",
+        "method": "GET",
+        "headers": {},
+        "post_data_buffer": None,
+        "resource_type": "document",
+    })()
+
+    monitor.record_request("anonymous", request)
+    serialized = json.dumps(monitor.report())
+
+    assert "alice" not in serialized
+    assert "verysecret" not in serialized
+    assert "[2001:db8::1]:8443" in serialized
+    assert "https://[2001:db8::1]:8443/private/path" in serialized

@@ -101,7 +101,8 @@ class TrafficMonitor:
         print(f"Traffic report: {report_path.as_posix()}")
 
     def _buckets(self, account_id: str, url: str, resource_type: str) -> list[TrafficBucket]:
-        domain = urlparse(url).netloc.lower() or "unknown"
+        parsed = urlparse(url)
+        domain = safe_traffic_netloc(parsed).lower() or "unknown"
         normalized_url = normalize_traffic_url(url)
         return [
             self.accounts.setdefault(account_id, TrafficBucket()),
@@ -141,7 +142,18 @@ def estimate_request_bytes(request: Any) -> int:
 def normalize_traffic_url(url: str) -> str:
     parsed = urlparse(url)
     path = parsed.path or "/"
-    return f"{parsed.scheme}://{parsed.netloc}{path}"
+    return f"{parsed.scheme}://{safe_traffic_netloc(parsed)}{path}"
+
+
+def safe_traffic_netloc(parsed: Any) -> str:
+    hostname = parsed.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    return f"{hostname}:{port}" if port is not None else hostname
 
 
 def serialize_buckets(values: dict[str, TrafficBucket]) -> dict[str, dict[str, Any]]:

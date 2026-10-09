@@ -160,6 +160,56 @@ def test_anonymous_profile_does_not_create_report_when_option_is_omitted() -> No
             os.chdir(old_cwd)
 
 
+def test_anonymous_profile_writes_traffic_report_after_runtime_failure(capsys) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        old_cwd = Path.cwd()
+        os.chdir(directory)
+        report = Path(directory) / "failed-profile-traffic.json"
+        try:
+            with (
+                patch("sys.argv", ["threads-parser", "target", "--traffic-report", str(report)]),
+                patch("threads_parser.cli.run", AsyncMock(side_effect=RuntimeError("profile failed"))),
+            ):
+                try:
+                    cli.main()
+                except SystemExit as exc:
+                    assert exc.code == 1
+                else:
+                    raise AssertionError("CLI should exit unsuccessfully")
+
+            data = json.loads(report.read_text(encoding="utf-8"))
+            assert data["accounts"] == {}
+            assert "Error: profile failed" in capsys.readouterr().out
+        finally:
+            os.chdir(old_cwd)
+
+
+def test_anonymous_search_writes_traffic_report_after_proxy_failure(capsys) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        old_cwd = Path.cwd()
+        os.chdir(directory)
+        report = Path(directory) / "failed-search-traffic.json"
+        try:
+            with (
+                patch("sys.argv", ["threads-parser", "--search", "cats", "--proxy", "http://proxy.invalid:8080", "--traffic-report", str(report)]),
+                patch("threads_parser.cli.run_search", AsyncMock(side_effect=cli.ProxyAccessError("blocked"))),
+                patch("threads_parser.cli.quarantine_proxy") as quarantine_proxy,
+            ):
+                try:
+                    cli.main()
+                except SystemExit as exc:
+                    assert exc.code == 1
+                else:
+                    raise AssertionError("CLI should exit unsuccessfully")
+
+            assert report.exists()
+            assert "accounts" in json.loads(report.read_text(encoding="utf-8"))
+            quarantine_proxy.assert_called_once_with("http://proxy.invalid:8080", cli.PROXY_ERROR)
+            assert "Error: Proxy was quarantined after an access failure." in capsys.readouterr().out
+        finally:
+            os.chdir(old_cwd)
+
+
 def test_search_browser_context_is_attached_to_traffic_monitor() -> None:
     class Context:
         def __init__(self):
