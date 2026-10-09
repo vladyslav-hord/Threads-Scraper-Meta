@@ -6,31 +6,23 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from threads_parser.media import _write_httpx_media
-from threads_parser.traffic import estimate_request_bytes
+from playwright.async_api import Error as PlaywrightError
 
-from threads_parser.cli import (
-    PlaywrightError,
-    TrafficMonitor,
-    collect_media,
-    configure_scan_context,
-    download_media,
+from threads_parser.browser import configure_scan_context, is_blocked_scan_request, scroll_profile
+from threads_parser.cli import parse_args
+from threads_parser.media import _write_httpx_media, download_media, prune_unreferenced_media
+from threads_parser.parser import collect_media, filter_posts_by_keywords, is_ignored_media_url
+from threads_parser.runner import run, run_search
+from threads_parser.search import (
     extract_search_posts,
-    filter_posts_by_keywords,
-    is_blocked_scan_request,
-    is_ignored_media_url,
-    load_saved_posts,
-    parse_args,
-    prune_unreferenced_media,
-    run,
-    run_search,
     search_has_next_page,
     search_mode_from_url,
     search_output_dir,
     search_url,
-    scroll_profile,
     scroll_search,
 )
+from threads_parser.storage import load_saved_posts
+from threads_parser.traffic import TrafficMonitor, estimate_request_bytes
 
 
 class MediaFilterTests(unittest.TestCase):
@@ -295,10 +287,10 @@ class MediaRetryTests(unittest.IsolatedAsyncioTestCase):
             try:
                 with (
                     patch(
-                        "threads_parser.cli.load_search_results",
+                        "threads_parser.runner.load_search_results",
                         AsyncMock(return_value=(raw_items, "user-agent", "tag", "top")),
                     ),
-                    patch("threads_parser.cli.download_media", download),
+                    patch("threads_parser.runner.download_media", download),
                 ):
                     await run_search("volleyball", 20, None)
                 saved = json.loads(Path("output/search/tag/top/volleyball/posts.json").read_text(encoding="utf-8"))
@@ -324,9 +316,9 @@ class MediaRetryTests(unittest.IsolatedAsyncioTestCase):
             os.chdir(directory)
             try:
                 with (
-                    patch("threads_parser.cli.load_public_profile", AsyncMock(return_value=([], [], "user-agent"))),
-                    patch("threads_parser.cli.extract_posts", return_value=posts),
-                    patch("threads_parser.cli.download_media", download),
+                    patch("threads_parser.runner.load_public_profile", AsyncMock(return_value=([], [], "user-agent"))),
+                    patch("threads_parser.runner.extract_posts", return_value=posts),
+                    patch("threads_parser.runner.download_media", download),
                 ):
                     await run("target", 1, None, keywords=["python"])
                 saved = json.loads(Path("output/target/posts.json").read_text(encoding="utf-8"))
@@ -363,9 +355,9 @@ class MediaRetryTests(unittest.IsolatedAsyncioTestCase):
             os.chdir(directory)
             try:
                 with (
-                    patch("threads_parser.cli.load_public_profile", load_profile),
-                    patch("threads_parser.cli.extract_posts", return_value=posts),
-                    patch("threads_parser.cli.download_media", download),
+                    patch("threads_parser.runner.load_public_profile", load_profile),
+                    patch("threads_parser.runner.extract_posts", return_value=posts),
+                    patch("threads_parser.runner.download_media", download),
                 ):
                     await run("target", 1, None, keywords=["python"])
                 saved = json.loads(Path("output/target/posts.json").read_text(encoding="utf-8"))

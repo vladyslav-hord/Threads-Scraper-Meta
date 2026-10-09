@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 from threads_parser.storage import atomic_write_json
 
 

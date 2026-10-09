@@ -31,9 +31,9 @@ def test_single_anonymous_profile_writes_requested_traffic_report() -> None:
         try:
             with (
                 patch("sys.argv", ["threads-parser", "target", "--traffic-report", str(report)]),
-                patch("threads_parser.cli.load_public_profile", load_profile),
-                patch("threads_parser.cli.extract_posts", return_value=posts),
-                patch("threads_parser.cli.download_media", AsyncMock(return_value=(0, 0))),
+                patch("threads_parser.runner.load_public_profile", load_profile),
+                patch("threads_parser.runner.extract_posts", return_value=posts),
+                patch("threads_parser.runner.download_media", AsyncMock(return_value=(0, 0))),
             ):
                 cli.main()
             data = json.loads(report.read_text(encoding="utf-8"))
@@ -67,10 +67,10 @@ def test_anonymous_search_writes_requested_traffic_report() -> None:
         try:
             with (
                 patch("sys.argv", ["threads-parser", "--search", "cats", "--traffic-report", str(report)]),
-                patch("threads_parser.cli.load_search_results", load_search),
-                patch("threads_parser.cli.search_result_connections", return_value=[{}]),
-                patch("threads_parser.cli.extract_search_posts", return_value=posts),
-                patch("threads_parser.cli.download_media", AsyncMock(return_value=(0, 0))),
+                patch("threads_parser.runner.load_search_results", load_search),
+                patch("threads_parser.runner.search_result_connections", return_value=[{}]),
+                patch("threads_parser.runner.extract_search_posts", return_value=posts),
+                patch("threads_parser.runner.download_media", AsyncMock(return_value=(0, 0))),
             ):
                 cli.main()
             data = json.loads(report.read_text(encoding="utf-8"))
@@ -113,11 +113,11 @@ def test_anonymous_proxy_batch_writes_requested_traffic_report() -> None:
         report = Path(directory) / "batch-traffic.json"
         try:
             with (
-                patch("threads_parser.cli.async_playwright", Playwright),
-                patch("threads_parser.cli.launch_browser", AsyncMock(return_value=Browser())),
-                patch("threads_parser.cli.load_public_profile_in_browser", load_profile),
-                patch("threads_parser.cli.extract_posts", return_value=posts),
-                patch("threads_parser.cli.download_media", AsyncMock(return_value=(0, 0))),
+                patch("threads_parser.runner.async_playwright", Playwright),
+                patch("threads_parser.runner.launch_browser", AsyncMock(return_value=Browser())),
+                patch("threads_parser.runner.load_public_profile_in_browser", load_profile),
+                patch("threads_parser.runner.extract_posts", return_value=posts),
+                patch("threads_parser.runner.download_media", AsyncMock(return_value=(0, 0))),
             ):
                 failures = asyncio.run(
                     cli.run_batch(["target"], 1, "http://proxy.invalid:8080", traffic_report_path=report)
@@ -150,9 +150,9 @@ def test_anonymous_profile_does_not_create_report_when_option_is_omitted() -> No
         try:
             with (
                 patch("sys.argv", ["threads-parser", "target"]),
-                patch("threads_parser.cli.load_public_profile", load_profile),
-                patch("threads_parser.cli.extract_posts", return_value=posts),
-                patch("threads_parser.cli.download_media", AsyncMock(return_value=(0, 0))),
+                patch("threads_parser.runner.load_public_profile", load_profile),
+                patch("threads_parser.runner.extract_posts", return_value=posts),
+                patch("threads_parser.runner.download_media", AsyncMock(return_value=(0, 0))),
             ):
                 cli.main()
             assert not (Path(directory) / "runs").exists()
@@ -182,6 +182,26 @@ def test_anonymous_profile_writes_traffic_report_after_runtime_failure(capsys) -
             assert "Error: profile failed" in capsys.readouterr().out
         finally:
             os.chdir(old_cwd)
+
+
+def test_report_write_failure_does_not_replace_parser_failure(capsys) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        report = Path(directory) / "unwritable" / "traffic.json"
+        with (
+            patch("sys.argv", ["threads-parser", "target", "--traffic-report", str(report)]),
+            patch("threads_parser.cli.run", AsyncMock(side_effect=RuntimeError("profile failed"))),
+            patch("threads_parser.cli.finish_traffic_report", side_effect=OSError("disk full")),
+        ):
+            try:
+                cli.main()
+            except SystemExit as exc:
+                assert exc.code == 1
+            else:
+                raise AssertionError("CLI should exit unsuccessfully")
+
+    output = capsys.readouterr().out
+    assert "Traffic report error: disk full" in output
+    assert "Error: profile failed" in output
 
 
 def test_anonymous_search_writes_traffic_report_after_proxy_failure(capsys) -> None:

@@ -1,16 +1,11 @@
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, os, random, re, tempfile, time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+
+import json
+import os
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse
-import httpx
-from playwright.async_api import Error as PlaywrightError
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-from playwright.async_api import async_playwright
 
-from .parser import *
+from .parser import media_key, normalize_media_entry
 def load_saved_posts(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []

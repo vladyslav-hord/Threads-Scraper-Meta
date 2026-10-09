@@ -1,14 +1,30 @@
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, os, random, re, tempfile, time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+
+import argparse
+import asyncio
+import hashlib
+import random
+import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse
-import httpx
+from urllib.parse import parse_qs, quote, urlparse
+
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
+
+from .accounts import AccountUnavailableError, PROXY_ERROR, REAUTH_REQUIRED
+from .browser import (
+    collect_response_json,
+    collect_script_json,
+    configure_scan_context,
+    dismiss_cookie_banner,
+    is_relevant_response_url,
+    launch_browser,
+)
+from .errors import ProxyAccessError
+from .parser import filter_posts_by_keywords, merge_posts, normalize_post, walk_json
+from .traffic import TrafficMonitor
 
 BASE_URL = "https://www.threads.com"
 SEARCH_MODES = ("keyword", "tag")
@@ -16,7 +32,6 @@ SEARCH_TYPES = ("top", "recent")
 DEFAULT_SEARCH_MODE = "tag"
 DEFAULT_SEARCH_TYPE = "top"
 FULL_CRAWL_MAX_SCROLLS = 1000
-from .parser import *
 def clean_search_query(value: str) -> str:
     query = " ".join(value.split())
     if not query:
@@ -165,8 +180,6 @@ async def load_search_results(
     traffic_monitor: TrafficMonitor | None = None,
     account_id: str | None = None,
 ) -> tuple[list[Any], str, str, str]:
-    from .browser import launch_browser
-
     async with async_playwright() as playwright:
         browser = await launch_browser(playwright, proxy)
         try:
@@ -199,8 +212,6 @@ async def load_search_results_in_browser(
     traffic_monitor: TrafficMonitor | None = None,
     account_id: str | None = None,
 ) -> tuple[list[Any], str, str, str]:
-    from .browser import configure_scan_context
-
     context = await browser.new_context(viewport={"width": 1280, "height": 900}, service_workers="block")
     try:
         await configure_scan_context(context)

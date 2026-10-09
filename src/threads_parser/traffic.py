@@ -1,14 +1,10 @@
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, os, random, re, tempfile, time
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse
-import httpx
-from playwright.async_api import Error as PlaywrightError
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-from playwright.async_api import async_playwright
+from urllib.parse import urlparse
 
 BASE_URL = "https://www.threads.com"
 @dataclass

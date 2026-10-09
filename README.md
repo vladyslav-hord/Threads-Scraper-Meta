@@ -12,7 +12,7 @@ Concurrent Threads public-data parser with profile/search crawling, incremental 
 
 ## Architecture
 
-`cli` validates options and orchestrates; `parser` extracts and normalizes posts; `browser` configures Playwright and collects profiles; `search` handles search modes and pagination; `media` downloads media; `proxies` and `accounts` manage network/account inputs; `quarantine` persists health state; `traffic` reports bytes; `storage` handles saved posts; `models` contains small data models.
+`cli` contains argparse validation and the command entry point; `runner` orchestrates profile, search, proxy, and account workflows; `parser` extracts and normalizes posts; `browser` configures Playwright and collects profiles; `search` handles search modes and pagination; `media` downloads media; `proxies` and `accounts` manage network/account inputs; `errors` holds shared workflow exceptions; `quarantine` persists health state; `traffic` reports bytes; `storage` handles saved posts.
 
 ## Installation
 

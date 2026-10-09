@@ -1,24 +1,24 @@
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, os, random, re, tempfile, time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+
+import asyncio
+import random
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import urlparse
+
 import httpx
 from playwright.async_api import Error as PlaywrightError
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-from playwright.async_api import async_playwright
+
+from .accounts import AccountUnavailableError, REAUTH_REQUIRED
+from .parser import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, normalize_media_entry
+from .search import safe_filename
+from .traffic import TrafficMonitor
 
 class RetryableMediaError(RuntimeError):
     pass
 
-MEDIA_DOWNLOAD_ATTEMPTS=3
-RETRYABLE_MEDIA_STATUSES=frozenset({408,425,429,500,502,503,504})
-from .parser import *
-from .search import safe_filename
-from .accounts import AccountUnavailableError
-from .traffic import *
+MEDIA_DOWNLOAD_ATTEMPTS = 3
+RETRYABLE_MEDIA_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
 def extension_for(url: str, media_type: str) -> str:
     suffix = Path(urlparse(url).path.lower()).suffix
     if suffix in IMAGE_EXTENSIONS or suffix in VIDEO_EXTENSIONS:

@@ -1,21 +1,24 @@
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, os, random, re, tempfile, time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+
+import asyncio
+import json
+import random
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse
-import httpx
+from urllib.parse import urlparse
+
 from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
+from .accounts import AccountUnavailableError, PROXY_ERROR, REAUTH_REQUIRED, playwright_proxy
+from .errors import ProxyAccessError, TargetProfileError
+from .parser import extract_posts, filter_posts_by_keywords, merge_posts, parse_script_json
+from .traffic import TrafficMonitor
+
 BASE_URL = "https://www.threads.com"
-FULL_CRAWL_MAX_SCROLLS=1000
-BLOCKED_SCAN_RESOURCE_TYPES=frozenset({"image","media","font"})
-SCAN_MEDIA_HOST_MARKERS=("cdninstagram.com","fbcdn.net","giphy.com","tenor.co")
-from .parser import *
-from .search import *
+FULL_CRAWL_MAX_SCROLLS = 1000
+BLOCKED_SCAN_RESOURCE_TYPES = frozenset({"image", "media", "font"})
+SCAN_MEDIA_HOST_MARKERS = ("cdninstagram.com", "fbcdn.net", "giphy.com", "tenor.co")
 def is_blocked_scan_request(request: Any) -> bool:
     if request.resource_type in BLOCKED_SCAN_RESOURCE_TYPES:
         return True
