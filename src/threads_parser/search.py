@@ -44,14 +44,14 @@ def search_url(query: str, search_mode: str, search_type: str) -> str:
     if search_mode == "tag":
         url += "&serp_type=tags"
     if search_type == "recent":
-        url += "&filter=recent"
+        url += "&filter=latest"
     return url
 
 
 def search_mode_from_url(url: str) -> tuple[str, str]:
     query = parse_qs(urlparse(url).query)
     mode = "tag" if query.get("serp_type") == ["tags"] else "keyword"
-    search_type = "recent" if query.get("filter") == ["recent"] else "top"
+    search_type = "recent" if query.get("filter") == ["latest"] else "top"
     return mode, search_type
 
 

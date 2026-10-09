@@ -147,7 +147,7 @@ class MediaFilterTests(unittest.TestCase):
         self.assertEqual(search_url("beach volleyball", "keyword", "top"), "https://www.threads.com/search/?q=beach%20volleyball")
         self.assertEqual(
             search_url("beach volleyball", "keyword", "recent"),
-            "https://www.threads.com/search/?q=beach%20volleyball&filter=recent",
+            "https://www.threads.com/search/?q=beach%20volleyball&filter=latest",
         )
         self.assertEqual(
             search_url("beach volleyball", "tag", "top"),
@@ -155,12 +155,12 @@ class MediaFilterTests(unittest.TestCase):
         )
         self.assertEqual(
             search_url("beach volleyball", "tag", "recent"),
-            "https://www.threads.com/search/?q=beach%20volleyball&serp_type=tags&filter=recent",
+            "https://www.threads.com/search/?q=beach%20volleyball&serp_type=tags&filter=latest",
         )
 
     def test_search_mode_is_detected_after_redirect(self) -> None:
         self.assertEqual(
-            search_mode_from_url("https://www.threads.com/search/?q=volleyball&serp_type=tags&filter=recent"),
+            search_mode_from_url("https://www.threads.com/search/?q=volleyball&serp_type=tags&filter=latest"),
             ("tag", "recent"),
         )
 
