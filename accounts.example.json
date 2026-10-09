@@ -1,0 +1,11 @@
+{
+  "accounts": [
+    {
+      "id": "parser_01",
+      "username": "example_parser",
+      "proxy": "http://proxy.example.invalid:8080",
+      "enabled": true,
+      "max_profiles_per_run": 20
+    }
+  ]
+}
